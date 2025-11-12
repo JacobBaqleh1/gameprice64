@@ -1,0 +1,7 @@
+[build]
+  base = "gameprice64" 
+  command = "npm install && npm run build"
+  publish = "gameprice64/app/.next"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"

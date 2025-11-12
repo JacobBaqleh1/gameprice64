@@ -1,0 +1,51 @@
+# Node modules
+node_modules/
+
+# Next.js build output
+.next/
+.next/cache/
+
+# Static export
+out/
+dist/
+
+# Local env files (do NOT commit secrets)
+.env
+.env.*.local
+.env.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Testing / coverage
+coverage/
+.nyc_output/
+
+# Editor / IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Build / tooling caches
+.cache/
+.parcel-cache/
+.eslintcache
+*.tsbuildinfo
+
+# Deployment/platform folders
+.vercel/
+.netlify/
+.now/
+
+# Storybook
+storybook-static/
