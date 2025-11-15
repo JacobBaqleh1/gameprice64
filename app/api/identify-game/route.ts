@@ -1,38 +1,79 @@
 import { NextResponse } from "next/server";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { imageData } = body;
-    if (!imageData) return NextResponse.json({ error: "No image provided" }, { status: 400 });
-
-    // Template: send imageData to your AI vision provider here.
-    // Replace this block with a real provider call (OpenAI Vision, Google Vision, etc.)
-    // Must set process.env.AI_API_KEY and implement your provider call securely on server side.
-
-    // MOCK fallback (if no provider configured): attempt to "guess" by filename or return Unknown
-    if (!process.env.AI_API_KEY) {
-      // Quick heuristic: if data URL contains a filename-like token, parse it (very naive)
-      return NextResponse.json({ title: "Unknown Game", platform: "Unknown", year: "" });
+    const { imageData } = await req.json();
+    if (!imageData) {
+      return NextResponse.json({ error: "No image provided" }, { status: 400 });
     }
 
-    // Example pseudo-call (fill with real provider API):
-    /*
-    const resp = await fetch("https://api.example.ai/vision", {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${process.env.AI_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt: "You are a video game expert. Identify title/platform/year from image. Return JSON { title, platform, year }",
-        image: imageData
-      })
-    });
-    const json = await resp.json();
-    return NextResponse.json({ title: json.title, platform: json.platform, year: json.year });
-    */
+    if (!process.env.GEMINI_API_KEY) {
+      return NextResponse.json({ error: "Missing GEMINI_API_KEY" }, { status: 500 });
+    }
 
-    // default:
-    return NextResponse.json({ title: "Unknown Game", platform: "Unknown", year: "" });
+    // Extract mimeType + base64
+    const [meta, base64Data] = imageData.split(",");
+    const mimeMatch = meta.match(/data:(.*);base64/);
+    const mimeType = mimeMatch ? mimeMatch[1] : "image/png";
+
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+    // System + user instructions combined
+    const prompt = `
+You are a video game expert. Analyze the provided image of a video game cartridge, box art, or disc. Identify:
+- title
+- platform
+- year (if visible or known)
+
+Return ONLY valid JSON (no comments, no explanation):
+
+{
+  "title": "",
+  "platform": "",
+  "year": ""
+}
+`;
+
+    const result = await model.generateContent({
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { text: prompt },
+            { text: "Identify this game." },
+            {
+              inlineData: {
+                mimeType,
+                data: base64Data
+              }
+            }
+          ]
+        }
+      ]
+    });
+
+    const text = result.response.text();
+console.log("GEMINI RAW RESPONSE:", text);
+// Remove markdown fences like ```json
+const cleaned = text
+  .replace(/```json/g, "")
+  .replace(/```/g, "")
+  .trim();
+
+    let parsed;
+    try {
+
+      parsed = JSON.parse(cleaned);
+    } catch (err) {
+        console.error("JSON parse failed:", cleaned);
+      parsed = { title: "Unknown Game", platform: "Unknown", year: "" };
+    }
+
+    return NextResponse.json(parsed);
+
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || "server error" }, { status: 500 });
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

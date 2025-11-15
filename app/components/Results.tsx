@@ -32,25 +32,25 @@ export default function Results({ imageData, onReset }: { imageData: string; onR
     identify();
   }, [imageData]);
 
-  useEffect(() => {
-    if (!game) return;
-    async function fetchPrices() {
-      setLoadingPrices(true);
-      try {
-        const res = await fetch("/api/fetch-prices", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: game.title, platform: game.platform })
-        });
-        if (!res.ok) throw new Error("Failed to fetch prices");
-        const json = await res.json();
-        setPrices(json.prices || []);
-      } catch (err: any) {
-        setError(err.message || "Price fetch failed");
-      } finally { setLoadingPrices(false); }
-    }
-    fetchPrices();
-  }, [game]);
+  // useEffect(() => {
+  //   if (!game) return;
+  //   async function fetchPrices() {
+  //     setLoadingPrices(true);
+  //     try {
+  //       const res = await fetch("/api/fetch-prices", {
+  //         method: "POST",
+  //         headers: { "Content-Type": "application/json" },
+  //         body: JSON.stringify({ title: game?.title, platform: game?.platform })
+  //       });
+  //       if (!res.ok) throw new Error("Failed to fetch prices");
+  //       const json = await res.json();
+  //       setPrices(json.prices || []);
+  //     } catch (err: any) {
+  //       setError(err.message || "Price fetch failed");
+  //     } finally { setLoadingPrices(false); }
+  //   }
+  //   fetchPrices();
+  // }, [game]);
 
   const numericPrices = prices.map(p => parsePrice(p.price)).filter(Boolean) as number[];
   const avg = numericPrices.length ? calculateAverage(numericPrices) : null;
