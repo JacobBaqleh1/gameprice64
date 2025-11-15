@@ -1,24 +1,35 @@
 import { NextResponse } from "next/server";
+import crypto from "crypto";
 
-const VERIFICATION_TOKEN = process.env.EBAY_VERIFICATION_TOKEN;
+// MUST match what you entered on eBay.
+// Must be 32–80 characters, only letters, numbers, _ or -
+const VERIFICATION_TOKEN = process.env.EBAY_VERIFICATION_TOKEN!;
 
-export async function POST(req: Request) {
-  try {
-    const body = await req.json();
+// IMPORTANT: must match EXACTLY what you submitted to eBay
+const ENDPOINT_URL = "https://gameprice64.vercel.app/api/ebay-deletion";
 
-    // eBay sends: { challenge: "<token>" }
-    if (body.challenge === VERIFICATION_TOKEN) {
-      return NextResponse.json({ challengeResponse: VERIFICATION_TOKEN });
-    }
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const challengeCode = searchParams.get("challenge_code");
 
-    // For actual deletion notices - just return 200 so eBay approves your app
-    return NextResponse.json({ status: "received" });
-  } catch (error) {
-    return NextResponse.json({ status: "ok" }); // still return 200 OK
+  if (!challengeCode) {
+    return NextResponse.json({ status: "ok" }, { status: 200 });
   }
+
+  // Compute the SHA-256 hash: challenge + token + endpoint
+  const hash = crypto.createHash("sha256");
+  hash.update(challengeCode);
+  hash.update(VERIFICATION_TOKEN);
+  hash.update(ENDPOINT_URL);
+
+  const responseHash = hash.digest("hex");
+
+  return NextResponse.json({
+    challengeResponse: responseHash
+  });
 }
 
-export async function GET() {
-  // eBay may test GET too
-  return NextResponse.json({ status: "ok" });
+export async function POST() {
+  // eBay sends deletion notices with POST
+  return NextResponse.json({ status: "received" }, { status: 200 });
 }
