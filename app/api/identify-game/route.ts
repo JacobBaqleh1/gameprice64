@@ -4,44 +4,40 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 export async function POST(req: Request) {
   try {
     const { imageData } = await req.json();
+
     if (!imageData) {
       return NextResponse.json({ error: "No image provided" }, { status: 400 });
     }
 
-    if (!process.env.GEMINI_API_KEY) {
-      return NextResponse.json({ error: "Missing GEMINI_API_KEY" }, { status: 500 });
-    }
-
-    // Extract mimeType + base64
     const [meta, base64Data] = imageData.split(",");
     const mimeMatch = meta.match(/data:(.*);base64/);
-    const mimeType = mimeMatch ? mimeMatch[1] : "image/png";
+    const mimeType = mimeMatch ? mimeMatch[1] : "image/jpeg";
 
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-    // System + user instructions combined
-    const prompt = `
-You are a video game expert. Analyze the provided image of a video game cartridge, box art, or disc. Identify:
-- title
-- platform
-- year (if visible or known)
-
-Return ONLY valid JSON (no comments, no explanation):
-
-{
-  "title": "",
-  "platform": "",
-  "year": ""
-}
-`;
+    const systemPrompt = `
+      You are a video game expert. Analyze images of video games and identify:
+      - title
+      - platform
+      - year
+      Return ONLY valid JSON in this exact shape:
+      {
+        "title": "...",
+        "platform": "...",
+        "year": "..."
+      }
+    `;
 
     const result = await model.generateContent({
       contents: [
         {
+          role: "system",
+          parts: [{ text: systemPrompt }]
+        },
+        {
           role: "user",
           parts: [
-            { text: prompt },
             { text: "Identify this game." },
             {
               inlineData: {
@@ -54,26 +50,41 @@ Return ONLY valid JSON (no comments, no explanation):
       ]
     });
 
-    const text = result.response.text();
-console.log("GEMINI RAW RESPONSE:", text);
-// Remove markdown fences like ```json
-const cleaned = text
-  .replace(/```json/g, "")
-  .replace(/```/g, "")
-  .trim();
+    const text = result.response.text().trim();
 
-    let parsed;
+    let identifiedGame;
     try {
-
-      parsed = JSON.parse(cleaned);
-    } catch (err) {
-        console.error("JSON parse failed:", cleaned);
-      parsed = { title: "Unknown Game", platform: "Unknown", year: "" };
+      identifiedGame = JSON.parse(text);
+    } catch {
+      identifiedGame = { title: "Unknown Game", platform: "Unknown", year: "" };
     }
 
-    return NextResponse.json(parsed);
+    //
+    // ⬇️ NEW PART: After identifying the game, call the price API
+    //
+    const priceResponse = await fetch(
+      `${process.env.NEXT_PUBLIC_BASE_URL}/api/get-price`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: identifiedGame.title,
+          platform: identifiedGame.platform
+        })
+      }
+    );
+
+    const priceData = await priceResponse.json();
+
+    return NextResponse.json({
+      game: identifiedGame,
+      price: priceData.price || null
+    });
 
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json(
+      { error: err.message || "server error" },
+      { status: 500 }
+    );
   }
 }
