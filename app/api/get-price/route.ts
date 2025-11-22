@@ -6,7 +6,7 @@ export async function POST(req: Request) {
   try {
     const { title, platform } = await req.json();
 
-    console.info("[get-price] request for:", title, platform);
+    console.log("[get-price] request for:", title, platform);
 
     if (!title) {
       return NextResponse.json({ error: "Missing game title" }, { status: 400 });
@@ -17,13 +17,13 @@ export async function POST(req: Request) {
       query
     )}&limit=10`;
 
-    console.debug("[get-price] query url:", url);
+    console.log("[get-price] query url:", url);
 
     // get a fresh access token
     let token: string;
     try {
       token = await getEbayAccessToken();
-      console.debug("[get-price] obtained eBay token length:", token.length);
+      console.log("[get-price] obtained eBay token length:", token.length);
     } catch (err) {
       console.error("[get-price] failed to get eBay token:", (err as any)?.message ?? String(err));
       return NextResponse.json({ error: "Failed to obtain eBay token" }, { status: 500 });
@@ -43,26 +43,21 @@ export async function POST(req: Request) {
     }
 
     const items = res.data?.itemSummaries;
-    let lowest = null;
+    console.debug("[get-price] raw items count:", Array.isArray(items) ? items.length : 0);
 
-    if (Array.isArray(items) && items.length > 0) {
-      lowest = items
-        .filter((i: any) => i?.price?.value)
-        .sort((a: any, b: any) => Number(a.price.value) - Number(b.price.value))[0];
-    }
+    const mapped = (Array.isArray(items) ? items : []).map((it: any) => ({
+      title: it.title,
+      price: it.price?.value ?? null,
+      currency: it.price?.currency ?? null,
+      condition: it.condition ?? null,
+      image: it.thumbnailImages?.[0]?.imageUrl ?? null,
+      itemId: it.itemId,
+      url: it.itemWebUrl ?? null,
+      seller: it.seller?.username ?? null,
+    }));
 
-    return NextResponse.json({
-      price: lowest
-        ? {
-            amount: lowest.price.value,
-            currency: lowest.price.currency,
-            condition: lowest.condition || "Unknown",
-            image: lowest.thumbnailImages?.[0]?.imageUrl || null,
-            itemId: lowest.itemId,
-            url: lowest.itemWebUrl || null,
-          }
-        : null,
-    });
+    // send an array of results instead of single lowest price
+    return NextResponse.json({ prices: mapped });
   } catch (error: any) {
     console.error("[get-price] ERROR:", (error as any)?.response?.data ?? error);
     return NextResponse.json({ error: "Error fetching price" }, { status: 500 });

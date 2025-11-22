@@ -3,10 +3,15 @@ import { useEffect, useState } from "react";
 import { calculateAverage, parsePrice } from "../lib/prices";
 
 interface PriceData {
-  marketplace: string;
-  price: string;
-  condition?: string;
-  url: string;
+  marketplace?: string;
+  title?: string;
+  price?: string | null;
+  currency?: string | null;
+  condition?: string | null;
+  image?: string | null;
+  itemId?: string | null;
+  url?: string | null;
+  seller?: string | null;
 }
 
 interface GameData {
@@ -116,11 +121,21 @@ export default function Results({
   }, [game]);
 
   const numericPrices = prices
-    .map((p) => parsePrice(p.price))
+    .map((p) => parsePrice(p.price ?? undefined))
     .filter(Boolean) as number[];
 
   const avg =
     numericPrices.length > 0 ? calculateAverage(numericPrices) : null;
+
+  // simple median helper for authenticity heuristics
+  function median(nums: number[]) {
+    if (!nums.length) return null;
+    const s = [...nums].sort((a, b) => a - b);
+    const mid = Math.floor(s.length / 2);
+    return s.length % 2 === 0 ? (s[mid - 1] + s[mid]) / 2 : s[mid];
+  }
+
+  const med = median(numericPrices);
 
   return (
     <div>
@@ -179,31 +194,39 @@ export default function Results({
       <div className="grid gap-4">
         {loadingPrices && <div>Loading marketplace prices...</div>}
 
-        {prices.map((p) => (
-          <div
-            key={p.marketplace}
-            className="p-3 bg-[#0b0b0d] rounded flex justify-between items-center"
-          >
-            <div>
-              <div className="font-semibold">{p.marketplace}</div>
-              <div className="text-sm text-gray-400">
-                {p.condition || "Condition unknown"}
+        {prices.length === 0 && !loadingPrices && <div>No marketplace results.</div>}
+
+        {prices.map((p, idx) => {
+          const priceNum = parsePrice(p.price ?? undefined);
+          const isLow = typeof priceNum === "number" && med !== null ? priceNum < (med as number) * 0.6 : false;
+          const titleLower = (p.title || "").toLowerCase();
+          const reproKeywords = ["repro", "bootleg", "copy", "aftermarket", "not original", "clone"];
+          const hasReproKeyword = reproKeywords.some((k) => titleLower.includes(k));
+          const likelyFake = hasReproKeyword || isLow;
+
+          return (
+            <div
+              key={p.itemId ?? idx}
+              className={`p-3 rounded flex items-center justify-between ${likelyFake ? "bg-red-900/30" : "bg-[#0b0b0d]"}`}
+            >
+              <div className="flex items-center gap-3">
+                <img src={p.image ?? undefined} alt="thumb" width={64} height={64} className="rounded bg-black" />
+                <div>
+                  <div className="font-semibold">{p.title}</div>
+                  <div className="text-sm text-gray-400">{p.condition || "Condition unknown"} • {p.seller || "Seller unknown"}</div>
+                </div>
+              </div>
+
+              <div className="text-right">
+                <div className="text-xl font-bold">{p.price ? `${p.price} ${p.currency ?? ""}`.trim() : "—"}</div>
+                <div className="text-sm">
+                  {likelyFake ? <span className="text-yellow-300">Possibly not authentic</span> : <span className="text-green-300">Looks authentic</span>}
+                </div>
+                <a href={p.url ?? "#"} target="_blank" rel="noreferrer" className="text-sm underline mt-1 inline-block">View</a>
               </div>
             </div>
-
-            <div className="text-right">
-              <div className="text-xl font-bold">{p.price}</div>
-              <a
-                href={p.url}
-                target="_blank"
-                rel="noreferrer"
-                className="text-sm underline mt-1 inline-block"
-              >
-                View
-              </a>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
